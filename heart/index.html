@@ -3,71 +3,137 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>I love you ❤️</title>
+  <meta name="theme-color" content="#050308">
+  <title>LOVE ❤️</title>
   <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; width: 100%; min-height: 100%; }
     body {
-      min-height: 100vh; display: grid; place-items: center; overflow: hidden;
-      background: #050308; color: #ffb6c1;
-      font-family: Arial, Helvetica, sans-serif;
+      min-height: 100vh; overflow: hidden; background: #050308;
+      display: grid; place-items: center; font-family: Arial, Helvetica, sans-serif;
     }
     canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
-    .message {
-      position: relative; z-index: 1; text-align: center; pointer-events: none;
-      color: #ffd6df; text-shadow: 0 0 12px #ff4d88, 0 0 28px #ff1f70;
-      font-size: clamp(1.6rem, 6vw, 3.4rem); font-weight: 700;
-      animation: pulse 1.8s ease-in-out infinite;
+    .caption {
+      position: fixed; z-index: 2; left: 0; right: 0; bottom: 7vh;
+      text-align: center; color: #ffd5e2; font-weight: bold;
+      font-size: clamp(1.3rem, 5vw, 2.6rem); letter-spacing: .12em;
+      text-shadow: 0 0 10px #ff4f91, 0 0 28px #ff176e;
+      pointer-events: none;
     }
-    .sub { margin-top: .55rem; font-size: clamp(.8rem, 2.5vw, 1rem); letter-spacing: .22em; }
-    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
-    @media (prefers-reduced-motion: reduce) { .message { animation: none; } }
   </style>
 </head>
 <body>
-  <canvas id="heart" aria-hidden="true"></canvas>
-  <main class="message">I love you <span aria-hidden="true">♥</span><div class="sub">WITH ALL MY HEART</div></main>
+  <canvas id="heart" aria-label="A palavra LOVE repetida forma um coração rosa animado"></canvas>
+  <div class="caption">I LOVE YOU ♥</div>
   <script>
     const canvas = document.getElementById('heart');
     const ctx = canvas.getContext('2d');
-    let w, h, dpr, scale = 1, points = [];
+    let width = 0, height = 0, dpr = 1, fontSize = 15, rows = [];
+
+    function heartPoint(t) {
+      return {
+        x: 16 * Math.sin(t) ** 3,
+        y: 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)
+      };
+    }
+
     function resize() {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      w = window.innerWidth; h = window.innerHeight;
-      canvas.width = w * dpr; canvas.height = h * dpr;
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      scale = Math.min(w, h) / 38;
-      points = [];
-      for (let i = 0; i < 120; i++) {
-        const t = i * Math.PI * 2 / 120;
-        const x = 16 * Math.sin(t) ** 3;
-        const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
-        points.push({ x, y });
+      fontSize = Math.max(10, Math.min(18, Math.min(width / 28, height / 30)));
+      ctx.font = 'bold ' + fontSize + 'px Arial, sans-serif';
+      rows = [];
+
+      // Each horizontal row is clipped to the mathematical outline of the heart.
+      const heartWidth = Math.min(width * 0.88, height * 0.82);
+      const heartHeight = heartWidth * 0.9;
+      const scaleX = heartWidth / 32;
+      const scaleY = heartHeight / 30;
+      const centerX = width / 2;
+      const centerY = height * 0.44;
+      const rowGap = fontSize * 1.08;
+      const count = Math.floor(heartHeight / rowGap);
+
+      for (let row = 0; row < count; row++) {
+        const y = -heartHeight / 2 + row * rowGap;
+        const normalizedY = (y / scaleY + 1) / 15;
+        let minX = Infinity, maxX = -Infinity;
+        for (let i = 0; i <= 500; i++) {
+          const p = heartPoint(i / 500 * Math.PI * 2);
+          const py = -p.y;
+          if (Math.abs(py - (y / scaleY)) < 0.2) {
+            minX = Math.min(minX, p.x);
+            maxX = Math.max(maxX, p.x);
+          }
+        }
+        // Find the left/right intersections for this scanline from the curve.
+        const intersections = [];
+        let previous = heartPoint(0);
+        for (let i = 1; i <= 1200; i++) {
+          const current = heartPoint(i / 1200 * Math.PI * 2);
+          const y0 = -previous.y, y1 = -current.y, target = y / scaleY;
+          if ((y0 <= target && y1 > target) || (y1 <= target && y0 > target)) {
+            const ratio = (target - y0) / (y1 - y0);
+            intersections.push(previous.x + ratio * (current.x - previous.x));
+          }
+          previous = current;
+        }
+        if (intersections.length >= 2) {
+          const left = centerX + Math.min(...intersections) * scaleX;
+          const right = centerX + Math.max(...intersections) * scaleX;
+          rows.push({ y: centerY + y, left, right, width: right - left, delay: row * 0.075 });
+        }
       }
     }
-    function draw(time) {
-      ctx.clearRect(0, 0, w, h);
-      const pulse = 1 + Math.sin(time / 500) * .035;
-      const s = scale * pulse;
-      ctx.save(); ctx.translate(w / 2, h / 2); ctx.scale(s, -s);
-      for (let layer = 16; layer >= 11; layer--) {
-        const factor = layer / 16;
+
+    function draw(now) {
+      ctx.clearRect(0, 0, width, height);
+      const elapsed = now / 1000;
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold ' + fontSize + 'px Arial, sans-serif';
+      const wordWidth = ctx.measureText('LOVE  ').width;
+      const cycle = 5.2;
+      const progress = (elapsed % cycle) / cycle;
+
+      // The heart is written from right to left, row by row, using repeated LOVE text.
+      rows.forEach((row, index) => {
+        const local = Math.max(0, Math.min(1, progress * 1.45 - row.delay * 0.11));
+        if (local <= 0) return;
+        const revealX = row.right - row.width * local;
+        ctx.save();
         ctx.beginPath();
-        points.forEach((p, i) => {
-          const x = p.x * factor, y = p.y * factor;
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        });
-        ctx.closePath();
-        ctx.strokeStyle = 'rgba(255, 90, 150,' + (0.12 + (16-layer)*0.035) + ')';
-        ctx.lineWidth = 0.055;
-        ctx.shadowColor = '#ff4f91'; ctx.shadowBlur = 12;
-        ctx.stroke();
-      }
+        ctx.rect(revealX, row.y - fontSize, row.right - revealX + 2, fontSize * 2);
+        ctx.clip();
+        const hue = 337 + Math.sin(elapsed * 2 + index * 0.35) * 9;
+        ctx.fillStyle = 'hsl(' + hue + ', 100%, ' + (72 + Math.sin(elapsed * 3 + index) * 8) + '%)';
+        ctx.shadowColor = '#ff2f85';
+        ctx.shadowBlur = 10;
+        const startX = row.left - wordWidth * 2;
+        for (let x = startX; x < row.right + wordWidth; x += wordWidth) {
+          ctx.fillText('LOVE', x, row.y);
+        }
+        ctx.restore();
+      });
+
+      // Soft, pulsing glow around the text heart.
+      ctx.save();
+      ctx.globalAlpha = 0.08 + (Math.sin(elapsed * 2) + 1) * 0.035;
+      ctx.fillStyle = '#ff2f85';
+      ctx.beginPath();
+      ctx.arc(width / 2, height * 0.43, Math.min(width, height) * 0.22, 0, Math.PI * 2);
+      ctx.filter = 'blur(48px)';
+      ctx.fill();
       ctx.restore();
       requestAnimationFrame(draw);
     }
+
     window.addEventListener('resize', resize);
-    resize(); requestAnimationFrame(draw);
+    resize();
+    requestAnimationFrame(draw);
   </script>
 </body>
 </html>
